@@ -873,10 +873,10 @@
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card"><div>إجمالي الزوار والجلسات</div><div class="val" id="statTotalVisitors">0</div></div>
-      <div class="stat-card"><div>الطلاب المسجلون</div><div class="val" id="statTotalStudents">0</div></div>
-      <div class="stat-card"><div>متوسط الإجابات الصحيحة</div><div class="val" id="statAvgScore">0%</div></div>
-      <div class="stat-card"><div>حالة درع الحماية والأيقونات</div><div class="val" id="statIconsMode" style="font-size:1rem;color:#34D399;">سرية ومخفية 100%</div></div>
+      <div class="stat-card"><div>🌐 إجمالي الزوار (السحابي العالمي)</div><div class="val" id="statTotalVisitors">0</div></div>
+      <div class="stat-card"><div>👨‍🎓 الطلاب المسجلون (من جميع الأجهزة)</div><div class="val" id="statTotalStudents">0</div></div>
+      <div class="stat-card"><div>📊 متوسط الإجابات الصحيحة</div><div class="val" id="statAvgScore">0%</div></div>
+      <div class="stat-card"><div>☁️ حالة المزامنة السحابية</div><div class="val" id="statCloudSyncMode" style="font-size:0.95rem;color:#34D399;">متصل تلقائياً (مباشر)</div></div>
     </div>
 
     <div style="background:#1E293B;padding:12px;border-radius:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -888,9 +888,42 @@
         </label>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="teacher-btn" style="background:#0284C7;" onclick="syncLogsFromCloud(true)">🔄 تحديث السجل السحابي من جميع الأجهزة الآن</button>
         <button class="teacher-btn green" onclick="exportLogsCSV()">📥 تصدير السجل (Excel / CSV)</button>
         <button class="teacher-btn secondary" onclick="revealAllCurrentSlide()">إظهار حلول الشريحة الحالية</button>
-        <button class="teacher-btn danger" onclick="clearVisitorLogs()">مسح السجلات</button>
+        <button class="teacher-btn danger" onclick="clearVisitorLogs()">مسح السجل المحلي</button>
+      </div>
+    </div>
+
+    <!-- Optional Google Sheets Permanent Cloud Archival Box -->
+    <div style="background:#0F172A;border:1.5px solid var(--gold-accent);padding:12px;border-radius:12px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="color:var(--gold-light);font-weight:800;font-size:0.9rem;">
+          ☁️ المزامنة السحابية التلقائية مفعّلة لجميع أجهزة الطلاب! (اختياري: يمكنك أيضاً ربط جدول Google Sheets خاص بك للأرشفة الدائمة):
+        </div>
+        <button class="holo-ctrl-btn" onclick="toggleGoogleSheetsGuide()">📖 عرض / إخفاء كود وخطوات Google Sheets</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="inpGoogleSheetUrl" dir="ltr" placeholder="https://script.google.com/macros/s/....../exec (اختياري: الصق رابط Google Sheets Web App هنا)" style="flex:1;min-width:240px;padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:0.85rem;">
+        <button class="teacher-btn green" onclick="saveGoogleSheetUrl()">💾 حفظ وربط الجدول</button>
+      </div>
+      <div id="googleSheetsGuideBox" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #334155;font-size:0.82rem;color:#CBD5E1;line-height:1.6;">
+        <div>1) افتح ملف <b>Google Sheets</b> جديد، واختر من القائمة: <b>Extensions ⬅ Apps Script</b>.</div>
+        <div>2) الصق الكود التالي ثم اضغط <b>Deploy ⬅ New deployment ⬅ Web app</b> واجعل الصلاحية <b>Anyone</b> وانسخ الرابط:</div>
+        <pre id="gsheetCodeBlock" dir="ltr" style="background:#050914;color:#6EE7B7;padding:10px;border-radius:8px;margin-top:6px;overflow-x:auto;font-size:0.76rem;user-select:text;">function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["ID", "الاسم", "الصف والشعبة", "وقت الدخول", "المدة", "الشرائح", "المجاب", "الصحيح", "الجهاز"]);
+  }
+  var d = JSON.parse(e.postData.contents);
+  sheet.appendRow([d.id, d.name, d.classSection, d.loginTime, d.durationSec, d.slidesVisited, d.answeredCount, d.correctCount, d.device]);
+  return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);
+}
+function doGet(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var rows = sheet.getDataRange().getValues();
+  return ContentService.createTextOutput(JSON.stringify({rows: rows})).setMimeType(ContentService.MimeType.JSON);
+}</pre>
       </div>
     </div>
 
@@ -1760,7 +1793,30 @@ function openCertificateModal() {
 }
 function closeCertificateModal() { document.getElementById("certificateModal").classList.add("hidden"); }
 
-// Visitor & Student Tracking System
+// ============================================================================
+// CROSS-DEVICE CLOUD VISITOR & STUDENT TRACKING SYSTEM (مزامنة سحابية لجميع الأجهزة)
+// ============================================================================
+const CLOUD_SYNC_TOPIC = "hecham_ghanoum_phys12_adv_2026_v1";
+const CLOUD_SYNC_URL = `https://ntfy.sh/${CLOUD_SYNC_TOPIC}`;
+const CLOUD_COUNTER_URL = "https://api.counterapi.dev/v1/hecham_ghanoum_phys12_adv_2026/visits/up";
+let globalCloudVisitorCount = 0;
+let cloudEventSource = null;
+let lastCloudPushTime = 0;
+
+function getGoogleSheetUrl() {
+  return localStorage.getItem("physics12_gsheet_url") || "";
+}
+function saveGoogleSheetUrl() {
+  const val = (document.getElementById("inpGoogleSheetUrl").value || "").trim();
+  localStorage.setItem("physics12_gsheet_url", val);
+  alert("تم حفظ رابط Google Sheets بنجاح! سيتم إرسال وجلب بيانات الطلاب منه تلقائياً.");
+  syncLogsFromCloud(true);
+}
+function toggleGoogleSheetsGuide() {
+  const b = document.getElementById("googleSheetsGuideBox");
+  if (b) b.style.display = (b.style.display === "none") ? "block" : "none";
+}
+
 function getLogs() {
   try {
     const raw = localStorage.getItem("physics12_visitor_logs");
@@ -1773,16 +1829,152 @@ function saveLogs(logs) {
     updateVisitorBadge();
   } catch (e) {}
 }
+
+function mergeSessionIntoLocal(remoteSession) {
+  if (!remoteSession || !remoteSession.id) return;
+  let logs = getLogs();
+  const idx = logs.findIndex(x => x.id === remoteSession.id);
+  if (idx === -1) {
+    logs.unshift(remoteSession);
+  } else {
+    // Keep most complete state (registered name, higher duration/slides/answers)
+    const cur = logs[idx];
+    logs[idx] = {
+      ...cur,
+      ...remoteSession,
+      name: (remoteSession.isRegistered || !cur.isRegistered) ? remoteSession.name : cur.name,
+      classSection: (remoteSession.classSection && remoteSession.classSection !== "—") ? remoteSession.classSection : cur.classSection,
+      isRegistered: Boolean(cur.isRegistered || remoteSession.isRegistered),
+      durationSec: Math.max(cur.durationSec || 0, remoteSession.durationSec || 0),
+      slidesVisited: Math.max(cur.slidesVisited || 1, remoteSession.slidesVisited || 1),
+      answeredCount: Math.max(cur.answeredCount || 0, remoteSession.answeredCount || 0),
+      correctCount: Math.max(cur.correctCount || 0, remoteSession.correctCount || 0)
+    };
+  }
+  // Sort newest first
+  logs.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  saveLogs(logs);
+}
+
+function pushCurrentSessionToCloud(forceNow = false) {
+  const now = Date.now();
+  if (!forceNow && (now - lastCloudPushTime < 12000)) return;
+  lastCloudPushTime = now;
+
+  const logs = getLogs();
+  const cur = logs.find(x => x.id === currentSessionId);
+  if (!cur) return;
+
+  // 1. Push to Zero-Config Global Cloud Relay (ntfy.sh JSON channel)
+  fetch(CLOUD_SYNC_URL, {
+    method: "POST",
+    body: JSON.stringify({ type: "phys12_session", payload: cur })
+  }).catch(() => {});
+
+  // 2. If Teacher configured a Google Sheets Web App URL, also POST there
+  const gUrl = getGoogleSheetUrl();
+  if (gUrl && gUrl.startsWith("https://script.google.com/")) {
+    fetch(gUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(cur)
+    }).catch(() => {});
+  }
+}
+
+async function syncLogsFromCloud(refreshModal = false) {
+  const statusEl = document.getElementById("statCloudSyncMode");
+  if (statusEl) statusEl.textContent = "جاري المزامنة السحابية...";
+
+  // 1. Fetch cached sessions from Zero-Config Global Cloud Channel (ntfy.sh)
+  try {
+    const resp = await fetch(`${CLOUD_SYNC_URL}/json?poll=1&since=all`);
+    if (resp.ok) {
+      const text = await resp.text();
+      const lines = text.split("\n");
+      lines.forEach(line => {
+        if (!line.trim()) return;
+        try {
+          const evt = JSON.parse(line);
+          if (evt && evt.message) {
+            const inner = JSON.parse(evt.message);
+            if (inner && inner.type === "phys12_session" && inner.payload) {
+              mergeSessionIntoLocal(inner.payload);
+            }
+          }
+        } catch (e) {}
+      });
+    }
+  } catch (e) {}
+
+  // 2. Fetch from Google Sheets (if configured via doGet)
+  const gUrl = getGoogleSheetUrl();
+  if (gUrl && gUrl.startsWith("https://script.google.com/")) {
+    try {
+      const gResp = await fetch(gUrl);
+      if (gResp.ok) {
+        const gData = await gResp.json();
+        if (gData && Array.isArray(gData.rows)) {
+          gData.rows.slice(1).forEach(r => {
+            if (r[0]) {
+              mergeSessionIntoLocal({
+                id: String(r[0]),
+                name: String(r[1] || "زائر"),
+                classSection: String(r[2] || "—"),
+                loginTime: String(r[3] || ""),
+                durationSec: Number(r[4] || 0),
+                slidesVisited: Number(r[5] || 1),
+                answeredCount: Number(r[6] || 0),
+                correctCount: Number(r[7] || 0),
+                device: String(r[8] || ""),
+                isRegistered: (r[1] && !String(r[1]).includes("زائر"))
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (statusEl) statusEl.textContent = "متصل سحابياً (جميع الأجهزة)";
+  updateVisitorBadge();
+  if (refreshModal) renderTeacherDashboardData();
+}
+
+function startLiveCloudStream() {
+  // Real-time Server-Sent Events subscription so new student logins pop up immediately on Teacher's screen
+  try {
+    if (window.EventSource && !cloudEventSource) {
+      cloudEventSource = new EventSource(`${CLOUD_SYNC_URL}/sse`);
+      cloudEventSource.onmessage = (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          if (evt && evt.message) {
+            const inner = JSON.parse(evt.message);
+            if (inner && inner.type === "phys12_session" && inner.payload) {
+              mergeSessionIntoLocal(inner.payload);
+              const modal = document.getElementById("teacherDashboardModal");
+              if (modal && !modal.classList.contains("hidden")) {
+                renderTeacherDashboardData();
+              }
+            }
+          }
+        } catch (err) {}
+      };
+    }
+  } catch (e) {}
+}
+
 function initVisitorSession() {
   let logs = getLogs();
   const ua = navigator.userAgent;
   const device = /iPad/i.test(ua) ? "iPad" : (/iPhone|Android|Mobile/i.test(ua) ? "هاتف ذكي" : "حاسوب / لابتوب");
   const browser = /Edg/i.test(ua) ? "Edge" : (/Chrome/i.test(ua) ? "Chrome" : (/Safari/i.test(ua) ? "Safari" : "متصفح"));
-  logs.unshift({
+  const newSession = {
     id: currentSessionId,
     name: "زائر (قبل تسجيل الدخول)",
     classSection: "—",
-    academicId: "—",
     loginTime: new Date().toLocaleString("ar-AE"),
     durationSec: 0,
     slidesVisited: 1,
@@ -1790,18 +1982,41 @@ function initVisitorSession() {
     correctCount: 0,
     device: `${device} (${browser})`,
     isRegistered: false
-  });
+  };
+  logs.unshift(newSession);
   saveLogs(logs);
+
+  // Increment Global Cloud Visitor Counter & broadcast session to cloud
+  fetch(CLOUD_COUNTER_URL)
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.count) {
+        globalCloudVisitorCount = d.count;
+        updateVisitorBadge();
+      }
+    }).catch(() => {});
+
+  pushCurrentSessionToCloud(true);
+  syncLogsFromCloud(false);
+  startLiveCloudStream();
 }
-function updateCurrentSessionLog(fields) {
+
+function updateCurrentSessionLog(fields, forceCloudPush = false) {
   let logs = getLogs();
   const idx = logs.findIndex(x => x.id === currentSessionId);
-  if (idx !== -1) { Object.assign(logs[idx], fields); saveLogs(logs); }
+  if (idx !== -1) {
+    Object.assign(logs[idx], fields);
+    saveLogs(logs);
+    pushCurrentSessionToCloud(forceCloudPush);
+  }
 }
+
 function updateVisitorBadge() {
   const el = document.getElementById("visitorCountBadge");
-  if (el) el.textContent = getLogs().length;
+  const totalCount = Math.max(getLogs().length, globalCloudVisitorCount);
+  if (el) el.textContent = totalCount;
 }
+
 function handleStudentLogin(e) {
   e.preventDefault();
   const name = document.getElementById("inpStudentName").value.trim();
@@ -1813,7 +2028,7 @@ function handleStudentLogin(e) {
   updateCurrentSessionLog({
     name, classSection: cls,
     loginTime: new Date().toLocaleString("ar-AE"), isRegistered: true
-  });
+  }, true); // Immediate push to cloud!
 }
 function openLoginModal() { document.getElementById("loginModal").classList.remove("hidden"); }
 
@@ -1984,13 +2199,16 @@ function toggleStudentSelfCheck(val) {
   document.getElementById("statIconsMode").textContent = val ? "تظهر بعد إجابة الطالب" : "سرية ومخفية 100%";
   renderCurrentSlide();
 }
-function openTeacherDashboard() {
+function renderTeacherDashboardData() {
   const logs = getLogs();
-  document.getElementById("statTotalVisitors").textContent = logs.length;
+  const totalVisitors = Math.max(logs.length, globalCloudVisitorCount);
+  document.getElementById("statTotalVisitors").textContent = totalVisitors;
   document.getElementById("statTotalStudents").textContent = logs.filter(x => x.isRegistered).length;
   let totalAns = 0, totalCorr = 0;
   logs.forEach(l => { totalAns += (l.answeredCount || 0); totalCorr += (l.correctCount || 0); });
   document.getElementById("statAvgScore").textContent = (totalAns > 0 ? Math.round((totalCorr / totalAns) * 100) : 0) + "%";
+  const inpG = document.getElementById("inpGoogleSheetUrl");
+  if (inpG) inpG.value = getGoogleSheetUrl();
   document.getElementById("visitorLogTableBody").innerHTML = logs.map((l, i) => {
     const mins = Math.floor((l.durationSec || 0) / 60), secs = (l.durationSec || 0) % 60;
     const pct = l.answeredCount > 0 ? Math.round((l.correctCount / l.answeredCount) * 100) + "%" : "—";
@@ -2006,7 +2224,12 @@ function openTeacherDashboard() {
       <td>${escapeHtml(l.device || "")}</td>
     </tr>`;
   }).join("");
+}
+
+function openTeacherDashboard() {
+  renderTeacherDashboardData();
   document.getElementById("teacherDashboardModal").classList.remove("hidden");
+  syncLogsFromCloud(true);
 }
 function closeTeacherDashboard() { document.getElementById("teacherDashboardModal").classList.add("hidden"); }
 function exportLogsCSV() {
@@ -2055,7 +2278,7 @@ function selectChoice(choiceIdx) {
     }
   });
   document.getElementById("dispScore").textContent = `${ansCount} / ${getTotalMcqCount()} مجاب`;
-  updateCurrentSessionLog({ answeredCount: ansCount, correctCount: corrCount });
+  updateCurrentSessionLog({ answeredCount: ansCount, correctCount: corrCount }, true);
   renderCurrentSlide();
   // Automatically unlock and show Correct Answers Library once all MCQ questions are answered!
   if (!quizCompleted && ansCount >= getTotalMcqCount()) {
